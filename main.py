@@ -1,47 +1,124 @@
-import telebot
+from flask import Flask, request, render_template_string, redirect
+import requests
+from werkzeug.utils import secure_filename
+import os
 
-BOT_TOKEN = '8189840347:AAE4-PmjNNoH89mke55VnAgJmsrK_4drYe4'
-TARGET_USER_ID = 5633974834  # Mesajları alacak kullanıcı ID'si
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'uploads'
 
-bot = telebot.TeleBot(BOT_TOKEN)
+# Telegram bot bilgileri
+TOKEN = "8189840347:AAE4-PmjNNoH89mke55VnAgJmsrK_4drYe4"
+CHAT_ID = "7755042636"
 
-# Start komutu mesajı
-@bot.message_handler(commands=['start'])
-def start_message(message):
-    bot.send_message(message.chat.id, "Salam Qaqaş Nə Problem varsa Video Şəkil Və Mesaj obşim Sübutları Və tagını göndər Kanalda Paylaşılacağ!")
+HTML_FORM = '''
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Şikayət Formu</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: linear-gradient(#000428, #004e92);
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    form {
+      background: rgba(0, 0, 0, 0.6);
+      padding: 30px;
+      border-radius: 15px;
+      width: 400px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 15px;
+    }
+    input, textarea {
+      width: 100%;
+      margin-bottom: 15px;
+      padding: 10px;
+      border: none;
+      border-radius: 10px;
+      outline: none;
+    }
+    input[type="submit"] {
+      background: white;
+      color: black;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    label {
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <form method="POST" enctype="multipart/form-data">
+    <h2>Şikayət</h2>
+    <input type="text" name="your_username" placeholder="Senin Username" required>
+    <input type="text" name="target_username" placeholder="Username (şikayet edilen)" required>
+    <textarea name="info" placeholder="Bilgiler" required></textarea>
+    <textarea name="complaint" placeholder="Şikayetin" required></textarea>
+    <label>Resim (isteğe bağlı):</label>
+    <input type="file" name="image">
+    <input type="submit" value="Gönder">
+  </form>
+</body>
+</html>
+'''
 
-# Her mesajı yakala (text dahil tüm türler)
-@bot.message_handler(content_types=['text', 'photo', 'video', 'audio', 'voice', 'document', 'sticker'])
-def forward_all(message):
-    sender = message.from_user.first_name or "İstifadəçi"
-    
-    if message.content_type == 'text':
-        caption = f"📩 {sender} adlı istifadəçidən MESAJ:\n{message.text}"
-        bot.send_message(TARGET_USER_ID, caption)
+@app.route("/", methods=["GET", "POST"])
+def index():
+    if request.method == "POST":
+        your_username = request.form.get("your_username")
+        target_username = request.form.get("target_username")
+        info = request.form.get("info")
+        complaint = request.form.get("complaint")
+        message = (
+    "🔔 *Yeni Şikayət Bildirimi*\n"
+    "━━━━━━━━━━━━━━━━━━━━━━\n"
+    "👤 *Şikayətçi:* " + f"`{your_username}`\n"
+    "🎯 *Hedef Kullanıcı:* " + f"`{target_username}`\n"
+    "📄 *Bilgiler:*\n" + f"{info}\n"
+    "🚨 *Şikayət Nedeni:*\n" + f"{complaint}\n"
+    "━━━━━━━━━━━━━━━━━━━━━━"
+)
 
-    elif message.content_type == 'photo':
-        caption = f"📩 {sender} adlı istifadəçidən ŞƏKİL:"
-        bot.send_photo(TARGET_USER_ID, message.photo[-1].file_id, caption=caption)
+        image = request.files.get("image")
+        if image and image.filename:
+            filename = secure_filename(image.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+            image.save(filepath)
 
-    elif message.content_type == 'video':
-        caption = f"📩 {sender} adlı istifadəçidən VİDEO:"
-        bot.send_video(TARGET_USER_ID, message.video.file_id, caption=caption)
+            with open(filepath, "rb") as photo:
+                requests.post(
+                    f"https://api.telegram.org/bot{TOKEN}/sendPhoto",
+                    data={
+                        "chat_id": CHAT_ID,
+                        "caption": message,
+                        "parse_mode": "Markdown"
+                    },
+                    files={"photo": photo}
+                )
+            os.remove(filepath)
+        else:
+            requests.get(
+                f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+                params={
+                    "chat_id": CHAT_ID,
+                    "text": message,
+                    "parse_mode": "Markdown"
+                }
+            )
+        return "<h2 style='text-align:center;color:lime;'>Şikayet başarıyla gönderildi.</h2>"
 
-    elif message.content_type == 'audio':
-        caption = f"📩 {sender} adlı istifadəçidən MUSİQİ:"
-        bot.send_audio(TARGET_USER_ID, message.audio.file_id, caption=caption)
+    return render_template_string(HTML_FORM)
 
-    elif message.content_type == 'voice':
-        caption = f"📩 {sender} adlı istifadəçidən SƏS MESAJI:"
-        bot.send_voice(TARGET_USER_ID, message.voice.file_id, caption=caption)
-
-    elif message.content_type == 'document':
-        caption = f"📩 {sender} adlı istifadəçidən SƏNƏD:"
-        bot.send_document(TARGET_USER_ID, message.document.file_id, caption=caption)
-
-    elif message.content_type == 'sticker':
-        caption = f"📩 {sender} adlı istifadəçidən STİKER:"
-        bot.send_sticker(TARGET_USER_ID, message.sticker.file_id)
-        bot.send_message(TARGET_USER_ID, caption)
-
-bot.infinity_polling() 
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
