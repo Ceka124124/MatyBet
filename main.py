@@ -8,7 +8,7 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 
 # Telegram bot bilgileri
 TOKEN = "8189840347:AAE4-PmjNNoH89mke55VnAgJmsrK_4drYe4"
-CHAT_ID = "7755042636"
+CHAT_ID = "5633974834"
 
 HTML_FORM = '''
 <!DOCTYPE html>
